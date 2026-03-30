@@ -9,6 +9,7 @@ import numpy as np
 import time
 from scipy.spatial import distance
 import pygame
+import winsound  # Windows beep for alarm fallback
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
@@ -145,19 +146,40 @@ def draw_face_landmarks(frame, face_landmarks, frame_width, frame_height):
 def play_alarm():
     """
     Play alarm sound when sleep is detected.
+    Creates a loud, attention-grabbing beep to wake up the user.
+    Uses multiple fallback methods for reliability.
     """
     try:
-        # Generate a simple beep sound
+        # Method 1: Try pygame with sndarray
         sample_rate = 22050
-        duration = 0.1
-        frequency = 440
+        duration = 0.5
+        frequency = 880
         t = np.linspace(0, duration, int(sample_rate * duration))
-        wave = np.sin(2 * np.pi * frequency * t)
-        sound = pygame.sndarray.make_sound((wave * 32767).astype(np.int16))
+        
+        # Create a pulsing wave
+        wave = np.sin(2 * np.pi * frequency * t) * np.sin(2 * np.pi * 4 * t)
+        
+        # Convert to 16-bit audio
+        audio_data = (wave * 32767 * 0.8).astype(np.int16)
+        
+        # Create stereo sound (2 channels)
+        stereo_data = np.column_stack((audio_data, audio_data))
+        
+        sound = pygame.sndarray.make_sound(stereo_data)
         sound.play()
+        return True
     except Exception as e:
-        # If sound fails, just pass
-        pass
+        print(f"Pygame alarm failed: {e}")
+        
+        # Method 2: Try Windows beep as fallback
+        try:
+            import winsound
+            # Play a beep: frequency 880Hz, duration 500ms
+            winsound.Beep(880, 500)
+            return True
+        except Exception as e2:
+            print(f"Winsound alarm failed: {e2}")
+            return False
 
 
 def main():
@@ -173,11 +195,14 @@ def main():
     
     # Initialize pygame mixer for alarm
     try:
-        pygame.mixer.init(frequency=22050, size=-16, channels=1)
+        pygame.init()
+        pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
         alarm_enabled = True
+        print("Alarm system initialized successfully")
     except Exception as e:
-        print(f"Warning: Pygame not available, alarm disabled: {e}")
-        alarm_enabled = False
+        print(f"Warning: Pygame initialization failed: {e}")
+        print("Will try Windows beep as fallback")
+        alarm_enabled = True  # Still enable alarm, will use winsound fallback
     
     # Variables for tracking
     eyes_closed_start_time = None
@@ -189,6 +214,30 @@ def main():
     print("Sleep Detection System Started")
     print("Press ESC to exit")
     print(f"MediaPipe version: {mp.__version__}")
+    
+    # Get screen resolution to center the window
+    try:
+        from screeninfo import get_monitors
+        monitor = get_monitors()[0]
+        screen_width = monitor.width
+        screen_height = monitor.height
+    except:
+        # Fallback if screeninfo is not available
+        screen_width = 1920
+        screen_height = 1080
+    
+    # Set window size
+    window_width = 800
+    window_height = 600
+    
+    # Calculate center position
+    window_x = (screen_width - window_width) // 2
+    window_y = (screen_height - window_height) // 2
+    
+    # Create named window and move it to center
+    cv2.namedWindow('Sleep Detection System', cv2.WINDOW_NORMAL)
+    cv2.resizeWindow('Sleep Detection System', window_width, window_height)
+    cv2.moveWindow('Sleep Detection System', window_x, window_y)
     
     # Create FaceLandmarker
     base_options = python.BaseOptions(model_asset_path='face_landmarker.task')
@@ -266,22 +315,33 @@ def main():
                     color = (0, 0, 255)  # Red
                     if last_sleep_start is None:
                         last_sleep_start = time.time()
+                        print("SLEEP DETECTED! Alarm activated.")
                     
-                    # Play alarm (with cooldown to avoid continuous beeping)
+                    # Play alarm repeatedly to wake up user (with short cooldown)
                     current_time = time.time()
-                    if alarm_enabled and (current_time - last_alarm_time) > 1.0:
-                        play_alarm()
+                    if alarm_enabled and (current_time - last_alarm_time) > 0.8:
+                        alarm_success = play_alarm()
                         last_alarm_time = current_time
+                        if alarm_success:
+                            alarm_playing = True
+                        else:
+                            print("Warning: Alarm failed to play")
                 else:
                     color = (0, 255, 0)  # Green
                     if last_sleep_start is not None:
                         total_sleep_time += time.time() - last_sleep_start
                         last_sleep_start = None
+                        print(f"Woke up! Total sleep time: {total_sleep_time:.2f}s")
+                    alarm_playing = False
                 
                 # Display status on frame
+                status_text = f"Status: {status}"
+                if is_sleeping and alarm_playing:
+                    status_text += " - ALARM!"
+                
                 cv2.putText(
                     frame, 
-                    f"Status: {status}", 
+                    status_text, 
                     (10, 30), 
                     cv2.FONT_HERSHEY_SIMPLEX, 
                     1, 

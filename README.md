@@ -9,7 +9,8 @@ A Python-based sleep detection system that uses computer vision to monitor eye c
 - ✅ Timer-based sleep detection (3-second threshold)
 - ✅ Visual feedback with color-coded status (Green=AWAKE, Red=SLEEPING)
 - ✅ Eye landmarks and face mesh visualization
-- ✅ Alarm sound when sleep is detected
+- ✅ Loud alarm sound to wake up user when sleep is detected
+- ✅ Centered video window for better viewing experience
 - ✅ Total sleep duration tracking
 - ✅ Optimized for real-time performance
 
@@ -27,7 +28,7 @@ A Python-based sleep detection system that uses computer vision to monitor eye c
 ### Step 1: Install Python Dependencies
 
 ```bash
-pip install opencv-python mediapipe numpy scipy pygame
+pip install opencv-python mediapipe numpy scipy pygame screeninfo
 ```
 
 Or use the requirements file:
@@ -78,12 +79,16 @@ python sleep_detector.py
 ## Usage
 
 - The application will automatically access your webcam
+- The video window will appear centered on your screen
 - Keep your face visible to the camera
 - The system will display:
   - Current status (AWAKE/SLEEPING)
   - Eye Aspect Ratio (EAR) value
   - Total sleep time accumulated
   - Eye landmarks and face mesh overlay
+- When sleep is detected (eyes closed for 3+ seconds):
+  - Status turns RED
+  - A loud, pulsing alarm sound plays repeatedly to wake you up
 - Press **ESC** to exit the application
 
 ## Configuration
